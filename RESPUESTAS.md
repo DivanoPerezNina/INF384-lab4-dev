@@ -46,14 +46,14 @@ Presupuesto: 8 min  Métrica DORA: time to restore
 - Problema que causa en el pipeline: load tenía `needs: smoke`, igual que e2e, así que los dos corrían a la vez contra la misma función. La carga cambia saldos mientras e2e los verifica, y el tráfico de e2e se mezcla con la latencia que mide k6, así que ninguno de los dos mide limpio. Además load corría también en cada pull request: unos 12 minutos por PR.
 - Link al commit: https://github.com/DivanoPerezNina/INF384-lab4-dev/commit/a22a0c02eb90f17b847f95a94cdb253380218d20
 - Corrección: mover de etapa (`needs: e2e`) y ajustar configuración (`if: github.event_name != 'pull_request'`; sigue corriendo en cada run de main).
-- Evidencia: en el run base https://github.com/DivanoPerezNina/INF384-lab4-dev/actions/runs/40955859003, e2e y load empezaron los dos a las 21:15:06 UTC, en paralelo contra la misma función. Con la corrección, en el run de main https://github.com/DivanoPerezNina/INF384-lab4-dev/actions/runs/40958068569, e2e terminó a las 21:30:23 y load empezó a las 21:30:25, después. En el run del pull request de la Parte 2 <link>, load aparece como skipped.
+- Evidencia: en el run base https://github.com/DivanoPerezNina/INF384-lab4-dev/actions/runs/40955859003, e2e y load empezaron los dos a las 21:15:06 UTC, en paralelo contra la misma función. Con la corrección, en el run de main https://github.com/DivanoPerezNina/INF384-lab4-dev/actions/runs/40958068569, e2e terminó a las 21:30:23 y load empezó a las 21:30:25, después. En el run del pull request de la Parte 2 https://github.com/DivanoPerezNina/INF384-lab4-dev/actions/runs/40960687323, load aparece como skipped.
 
 ## Parte 2 · Implementación
 - Link al run en verde en main: https://github.com/DivanoPerezNina/INF384-lab4-dev/actions/runs/40958068569
-- Link al pull request: [COMPLETAR]
+- Link al pull request: https://github.com/DivanoPerezNina/INF384-lab4-dev/pull/1
 - Defecto de la aplicación introducido (archivo y descripción): `src/wallet.js`, en `transferir` la condición de saldo pasa de `cuentaOrigen.saldo < centimos` a `<=`. Un usuario ya no puede transferir exactamente todo su saldo: la API responde 400 "saldo insuficiente" cuando sí le alcanza.
 - Job que debería detenerlo: `unit` (prueba "transferir todo el saldo deja el origen en cero"). integration también falla ("transferir todo el saldo deja el origen en cero y ya no puede transferir"). Al fallar, build-push no corre y nada se despliega.
-- Link al run fallido: [COMPLETAR]
+- Link al run fallido: https://github.com/DivanoPerezNina/INF384-lab4-dev/actions/runs/40960687323 (unit e integration en rojo; build-push, deploy, smoke, e2e y load en skipped, nada se desplegó)
 
 ## Parte 3 · Decisión bajo restricción
 Link al run medido: https://github.com/DivanoPerezNina/INF384-lab4-dev/actions/runs/40958068569
@@ -89,11 +89,27 @@ SLA propuesto y diferencia con el SLO: Monedero Andino se compromete con sus cli
 Cambios para cumplir el presupuesto:
 | Cambio | Job | Minutos recuperados |
 |---|---|---|
-| Etapa constante de 10 a 4 min y rampas de 1 min a 30 s y 15 s (commit https://github.com/DivanoPerezNina/INF384-lab4-dev/commit/58b4a4c6413ee87bef24dbb3f719b5f5ce699c4f) | load | [COMPLETAR: duración antes menos después, aprox. 7] |
-| [COMPLETAR si hace falta] | | |
+| Etapa constante de 10 a 4 min y rampas de 1 min a 30 s y 15 s (commit https://github.com/DivanoPerezNina/INF384-lab4-dev/commit/58b4a4c6413ee87bef24dbb3f719b5f5ce699c4f) | load | 7:15 (las etapas de k6 pasan de 12:00 a 4:45) |
+| Rampas de 30 s y 15 s a 10 s y 5 s; la carga constante sigue en 4 min (commit https://github.com/DivanoPerezNina/INF384-lab4-dev/commit/0b2e467) | load | 0:30 (las etapas de k6 pasan de 4:45 a 4:15) |
+| `SLO_P95` de 500 a 50 ms, sin efecto en la duración (commit https://github.com/DivanoPerezNina/INF384-lab4-dev/commit/1b8fbc4) | load | 0:00 |
 
-Total resultante: [COMPLETAR] min
-Link al run en main con los cambios: [COMPLETAR]
+Los dos recortes se midieron juntos en un mismo run: load pasó de 12:08 en el run medido a 4:25 en el run nuevo, 7:43 menos. La separación entre los dos commits sale de la duración de las etapas de k6. El resto de los jobs varió unos segundos entre runs (de 2:37 a 2:22 sin contar load).
+
+| Job | Antes (run medido) | Después |
+|---|---|---|
+| unit | 0:13 | 0:11 |
+| integration | 0:12 | 0:11 |
+| sast | 0:22 | 0:19 |
+| sca | 0:22 | 0:18 |
+| build-push | 0:41 | 0:43 |
+| deploy | 0:20 | 0:15 |
+| smoke | 0:12 | 0:11 |
+| e2e | 0:15 | 0:14 |
+| load | 12:08 | 4:25 |
+| **Total** | **14:45** | **6:47** |
+
+Total resultante: 6:47 min (presupuesto 8 min), con load en verde contra el nuevo `SLO_P95: 50`.
+Link al run en main con los cambios: https://github.com/DivanoPerezNina/INF384-lab4-dev/actions/runs/40960182987
 
 Riesgo aceptado (defecto de la aplicación concreto y efecto en la métrica DORA asignada): Con la carga constante de 4 minutos (antes 10) y sin load en los pull requests, el pipeline detecta más tarde, o deja de detectar, defectos de rendimiento que solo aparecen con carga sostenida o con la base más llena. Ejemplo concreto: un cambio en `src/db.js` que calcule el saldo sumando la tabla `movimientos` en vez de leer `usuarios.saldo`. La latencia crece con cada transferencia acumulada; en 4 minutos se acumulan menos de la mitad de las filas que en 10, así que el p95 puede quedar bajo los 50 ms y el cambio llega a main desplegado. Efecto en **time to restore: sube**. La degradación se descubre en producción y no en el pipeline, cuando la base ya tiene más movimientos y la latencia es peor; hay que notar el problema, encontrar la causa en `src/db.js` y pasar la corrección por todo el pipeline otra vez. Además, como el PR no corre load, la regresión se ve recién después del merge, con la versión mala ya en la función.
 
