@@ -9,9 +9,9 @@ http.setResponseCallback(http.expectedStatuses(200, 400));
 
 export const options = {
   stages: [
-    { duration: '30s', target: 30 },
+    { duration: '10s', target: 30 },
     { duration: '4m', target: 30 },
-    { duration: '15s', target: 0 },
+    { duration: '5s', target: 0 },
   ],
   thresholds: {
     http_req_duration: [`p(95)<${SLO_P95}`],
