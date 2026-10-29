@@ -14,7 +14,7 @@ permissions:
 env:
   APP: monedero-andino
   AWS_REGION: us-east-1
-  SLO_P95: 500
+  SLO_P95: 50
 
 jobs:
 
